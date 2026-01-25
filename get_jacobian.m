@@ -1,17 +1,22 @@
 function [A, B] = get_jacobian(x, u, epsilon_x, epsilon_u)
 % Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u.
-    zero_vec = zeros(length(x));
+    nx = length(x);
+    nu = length(u);
+    A = zeros(nx, nx);
+    B = zeros(nx, nu);
+
+    zero_vec_x = zeros(nx, 1);
+    zero_vec_u = zeros(nu, 1);
     
-    for i = range(length(x))
-        eps_x = zero_vec;
-        eps_u = zero_vec;
+    for i = 1:nx
+        eps_x = zero_vec_x;
         eps_x(i) = epsilon_x(i);
+        A(:, i) = (dynamics_fn(x + eps_x, u) - dynamics_fn(x - eps_x, u)) / (2 * eps_x(i));
+    end 
+
+    for i = 1:nu
+        eps_u = zero_vec_u;
         eps_u(i) = epsilon_u(i);
-
-        dX_dx = (dynamics_fn(x + eps_x, u) - dynamics_fn(x + eps_x, u)) / (2 * eps_x(i));
-        dX_du = (dynamics_fn(x, u + eps_u) - dynamics_fn(x, u + eps_u)) / (2 * eps_u(i));
-
-        A(i,:) = dX_du(:);
-        B(i,:) = dX_du(:);
+        B(:, i) = (dynamics_fn(x, u + eps_u) - dynamics_fn(x, u - eps_u)) / (2 * eps_u(i));
     end 
 end
