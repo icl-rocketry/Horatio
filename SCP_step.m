@@ -1,0 +1,40 @@
+function [x_new, u_new] = SCP_step(x_ref, u_ref, x_current, params)
+    N = params.N;
+
+    % Linearisation
+    for k = 1:N-1
+        A(k), B_minus(k), B_plus(k) = get_jacobian(x_ref(k), u_ref(k), u_ref(k+1), params.eps_x, params.eps_u, dt, params);
+
+        x_pred = A(k) * x_ref(k) + B_minus(k) * u_ref(k) + B_plus(k) * u_ref(k+1);
+        x_real = dynamics_step(x_ref(k), u_ref(k), u_ref(k+1), dt, params);
+        w(k) = x_real - x_pred;
+    end 
+
+    cvx_begin quiet
+        cvx_solver ecos
+
+        % Variables
+        variable dx(params.state_size, N);
+        variable du(params.state_size, N);
+        variable nu(params.state_size, N);
+
+        minimize()
+
+        % Cost function
+        cost_fuel = dx(8, N);
+        cost_safety = params.w_safety * dx(9, N);
+        cost_tr_x = params.w_tr_x * sum_square(dx);
+        cost_tr_u = params.w_tr_u * sum_square(du);
+        cost_slack = params.w_slack * sum(sum(abs(nu)));
+        find_pos_ref = x_ref(1:3, N);
+        find_pos_dev = dx(1:3, N);
+        actual_end_pos = final_pos_ref + final_pos_dev;
+    
+        cost_terminal = params.w_terminal * sum_square(actual_end_pos - params.target_pos);
+    
+        % Enforce Constraints
+        
+    
+        % Update
+end
+
