@@ -1,4 +1,4 @@
-function [A, B_minus, B_plus] = get_jacobian(x, u, u_, epsilon_x, epsilon_u, dt, params)
+function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, epsilon_x, epsilon_u, epsilon_t, dt, params)
 % Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u,u_.
     nx = length(x);
     nu = length(u);
@@ -12,7 +12,19 @@ function [A, B_minus, B_plus] = get_jacobian(x, u, u_, epsilon_x, epsilon_u, dt,
     for i = 1:nx
         eps_x = zero_vec_x;
         eps_x(i) = epsilon_x(i);
-        A(:, i) = (dynamics_step(x + eps_x, u, u_, dt, params) - dynamics_step(x - eps_x, u, u_, dt, params)) / (2 * eps_x(i));
+
+        x_plus = x + eps_x;
+        x_minus = x - eps_x;
+
+        if ismember(i, params.q_idx)
+            q_p = x_plus(params.q_idx);
+            q_m = x_minus(params.q_idx);
+            
+            x_plus(params.q_idx)  = q_p / norm(q_p);
+            x_minus(params.q_idx) = q_m / norm(q_m);
+        end 
+
+        A(:, i) = (dynamics_step(x_plus, u, u_, dt, params) - dynamics_step(x_minus, u, u_, dt, params)) / (2 * eps_x(i));
     end 
 
     for i = 1:nu
@@ -24,4 +36,10 @@ function [A, B_minus, B_plus] = get_jacobian(x, u, u_, epsilon_x, epsilon_u, dt,
         B_minus(:, i) = (dynamics_step(x, u + eps_u, u_, dt, params) - dynamics_step(x, u - eps_u, u_, dt, params)) / (2 * eps_u(i));
         B_plus(:, i) = (dynamics_step(x, u, u + eps_u_, dt, params) - dynamics_step(x, u, u - eps_u_, dt, params)) / (2 * eps_u_(i));
     end 
+    
+    eps_t = epsilon_t;
+    val_plus  = dynamics_step(x, u, u_, dt + eps_t, params);
+    val_minus = dynamics_step(x, u, u_, dt - eps_t, params);
+    dx_ddt = (val_plus - val_minus) / (2 * eps_t);
+    S = dx_ddt * (1 / (params.N - 1));
 end

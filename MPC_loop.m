@@ -1,10 +1,11 @@
-function [x_opt, u_opt] = MPC_loop(x_current, x_ref, u_ref, params)
+function [x_opt, u_opt, sigma_opt] = MPC_loop(x_current, x_ref, u_ref, sigma_ref, params)
     current_sol_x = x_ref;
     current_sol_x(:, 1) = x_current;
     current_sol_u = u_ref;
+    current_sol_sigma = sigma_ref;
 
     for iter = 1:params.max_solver_iters
-        [X_new, U_new, cvx_status] = SCP_step(current_sol_x, current_sol_u, x_current, params);
+        [X_new, U_new, sigma_new, cvx_status] = SCP_step(current_sol_x, current_sol_u, current_sol_sigma, x_current, params);
 
         if ~contains(cvx_status, 'solved')
             warning("Solver failed, initiating fallback");
@@ -26,4 +27,5 @@ function [x_opt, u_opt] = MPC_loop(x_current, x_ref, u_ref, params)
 
     x_opt = current_sol_x;
     u_opt = current_sol_u;
+    sigma_opt = sigma_new;
 end
