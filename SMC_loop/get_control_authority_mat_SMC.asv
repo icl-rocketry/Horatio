@@ -14,9 +14,9 @@ function [B] = get_control_authority_mat_SMC(x_current, Uff, dt, params)
         grad_vec = (dynamics_step_SMC(x_current, Uff_0 + eps, Uff_1, dt, params) - dynamics_step_SMC(x_current, Uff_0 - eps, Uff_1, dt, params)) / (2 * eps);
 
         % snap quaternions back to manifold
-        q = grad_vec(params.q_idx);
+        q = grad_vec(params.q_idx)
         q_snapped = q / norm(q);
-        grad_vec(params.q_idx) = q_snapped;
+        grad_vec(params)
         
         % set B terms as gradient
         B(1:3, k) = grad_vec(1:3);

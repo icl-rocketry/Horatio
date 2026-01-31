@@ -1,22 +1,23 @@
 function [U] = second_order_SMC(current_state, Uff, X_opt)
 % Takes signal optimal signal Uff and adjusts it with 2-SMC corrective output to ensure it follows the optimal trajectory X_opt
     current_state_derivative = dynamics_step_SMC();
+    X_opt_dot = dynamics_step_SMC();
 
-    r_curr = ;
-    v_curr = ;
-    a_curr = ;
+    r_curr = current_state(1:3);
+    v_curr = current_state(4:6);
+    a_curr = current_state_derivative(4:6);
 
-    r_opt = ;
-    v_opt = ;
-    a_opt = ;
+    r_opt = X_opt(1:3);
+    v_opt = X_opt(4:6);
+    a_opt = X_opt_dot(4:6);
 
-    q_curr = ;
-    w_curr = ;
-    w_dot_curr = ;
+    q_curr = current_state(7:10);
+    w_curr = current_state(11:13);
+    w_dot_curr = current_state_derivative(11:13);
 
-    q_opt = ;
-    w_opt = ;
-    w_dot_opt = ;
+    q_opt = X_opt(7:10);
+    w_opt = X_opt(11:13);
+    w_dot_opt = X_opt_dot(11:13);
 
     corrective_force = required_force_SMC();
     
@@ -43,8 +44,7 @@ function [U] = second_order_SMC(current_state, Uff, X_opt)
 
     R = diag([r_fin_1, r_fin_2, r_fin_3, r_gimble_y, r_gimble_z]);
     W = diag([w_Fx, w_Fy, w_Fz, w_taux, w_tauy, w_tauz]);
-    B = get_control_authority_mat_SMC()
+    B = get_control_authority_mat_SMC();
 
     delta_U = control_assignment_optimisation_SMC();
 end
-

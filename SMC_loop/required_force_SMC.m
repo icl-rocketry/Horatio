@@ -1,5 +1,4 @@
 function [nu] = required_force_SMC(r_curr, v_curr, a_curr, q_curr, w_curr, w_dot_curr, r_ref, v_ref, q_ref, w_ref, w_dot_ref, params)
-    
     % get translational errors
     err_r = r_curr - r_ref;
     err_v = v_curr - v_ref;
