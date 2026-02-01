@@ -1,7 +1,12 @@
-function [outputArg1,outputArg2] = quaternion_conjugate(inputArg1,inputArg2)
-%QUATERNION_CONJUGATE Summary of this function goes here
-%   Detailed explanation goes here
-outputArg1 = inputArg1;
-outputArg2 = inputArg2;
+function [q_star] = quaternion_conjugate_SMC(q)
+% obtains quaternion conjugate
+    % decompose quaternion into components
+    w = q(1); 
+    x = q(2); 
+    y = q(3); 
+    z = q(4);
+    
+    % define quaternion conjugate
+    q_star = [w; -x; -y; -z];
 end
 

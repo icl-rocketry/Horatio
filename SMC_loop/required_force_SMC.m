@@ -1,4 +1,5 @@
-function [nu] = required_force_SMC(r_curr, v_curr, a_curr, q_curr, w_curr, w_dot_curr, r_ref, v_ref, q_ref, w_ref, w_dot_ref, params)
+function [nu] = required_force_SMC(r_curr, v_curr, a_curr, q_curr, w_curr, w_dot_curr, r_ref, v_ref, a_ref, q_ref, w_ref, w_dot_ref, C1, C2)
+% Defines error surfaces to obtain 2nd order sliding mode control law to calculate required forces/torques
     % get translational errors
     err_r = r_curr - r_ref;
     err_v = v_curr - v_ref;
@@ -24,6 +25,7 @@ function [nu] = required_force_SMC(r_curr, v_curr, a_curr, q_curr, w_curr, w_dot
     % concatenate error surfaces
     sigma = [sigma_pos; sigma_att];
     sigma_dot = [sigma_pos_dot; sigma_att_dot];
-
-    nu = - R1 * tanh(sigma) - R2 * tanh(sigma_dot);
+    
+    % use error surface and its derivative to define control law
+    nu = - C1 * tanh(sigma) - C2 * tanh(sigma_dot);
 end

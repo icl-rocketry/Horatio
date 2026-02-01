@@ -1,4 +1,4 @@
-function [x_] = dynamics_step(x, u, u_, dt, params)
+function [x_] = dynamics_step_SMC(x, u, u_, dt, params)
 % RK4 integration step with FOH control input
     u_grad = (u_ - u) / dt;
     k1 = dynamics_fn_aug(t, x, u, params);

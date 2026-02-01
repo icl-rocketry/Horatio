@@ -1,4 +1,4 @@
-function [B] = get_control_authority_mat_SMC(x_current, Uff, dt, params)
+function [B] = get_control_authority_mat_SMC(x_current, Uff, Uff_, dt, params)
 % Linearises control response in dynamics model to obtain control authority matrix
     nx = params.state_size_SMC;
     nu = params.control_size_SMC;
@@ -11,7 +11,7 @@ function [B] = get_control_authority_mat_SMC(x_current, Uff, dt, params)
         eps(k) = eps_u;
 
         % get grad vector wit finite difference method
-        grad_vec = (dynamics_step_SMC(x_current, Uff_0 + eps, Uff_1, dt, params) - dynamics_step_SMC(x_current, Uff_0 - eps, Uff_1, dt, params)) / (2 * eps);
+        grad_vec = (dynamics_step_SMC(x_current, Uff + eps, Uff_, dt, params) - dynamics_step_SMC(x_current, Uff - eps, Uff_, dt, params)) / (2 * eps);
 
         % snap quaternions back to manifold
         q = grad_vec(params.q_idx);
