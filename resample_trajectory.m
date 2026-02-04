@@ -1,4 +1,7 @@
 function [X_new, U_new] = resample_trajectory(prev_x, prev_u, prev_sigma, new_sigma, dt_shift, params)
+% maps previous temporal grid to new temporal grid to accomodate change in timestep
+
+    % horizon length
     N = params.N;
     
     % define previous grid
