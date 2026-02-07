@@ -28,19 +28,12 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         variable sigma(1)
         
         % linearise cost functions
-        [L, grad_L, P, grad_P] = linearise_terminal_fns(xref, params);
-        
-        % obtain trajectory distance from refernce and normalise onto manifold
-        d = X - x_ref;
-        for k = 1:N
-            q_raw = d(params.q_idx, k);
-            d(params.q_idx, k) = q_raw / norm(q_raw);
-        end
+        L, grad_L, P, grad_P = linearise_terminal_fns(X, U, params);
         
         % obtain objective function
-        J_cost = L + grad_L * d(:, end); 
+        J_cost = L + grad_L * (X(:, N) - x_ref(:, N)); 
         J_penalty = params.w_ep * nu_h + params.w_ep * sum(sum(mu_p + mu_n));
-        J_prox_x = sum(sum_square(d));
+        J_prox_x = sum(sum_square(X - x_ref));
         J_prox_u = sum(sum_square(U - u_ref));
         J_prox = (params.w_prox / 2) * (J_prox_x + J_prox_u);
         
