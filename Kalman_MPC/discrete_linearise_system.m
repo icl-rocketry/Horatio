@@ -1,12 +1,14 @@
-function [A_disc, B_disc] = discrete_linearise_system(x_measured, u_last, dt, params)
-% Takes measured position and linearises around to create linearised system
+function [A_aug, B_aug, C_aug] = discrete_linearise_system(x_measured, u_last, C, Bd, dt, params)
+% Takes measured position + last input and linearises around to create linearised system
+    % define parameters
     epsilon_x = params.eps_x;
     epsilon_u = params.eps_u;
     nx = params.nx;
     nu = params.nu;
+
+    % create empty
     A_cont = zeros(nx, nx);
     B_cont = zeros(nx, nu);
-
     eps_x = zeros(nx, 1);
     eps_u = zeros(nu, 1);
     
@@ -52,4 +54,9 @@ function [A_disc, B_disc] = discrete_linearise_system(x_measured, u_last, dt, pa
     
     % 2nd order taylor series to find discretised B
     B_disc = (I .* dt + (A_cont .* (dt ^ 2) ./ 2)) * B_cont;
+
+    % augment matrices
+    A_aug = [A_disc, Bd; 0, I];
+    B_aug = [B_disc; 0];
+    C_aug = [C, 0];
 end
