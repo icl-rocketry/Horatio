@@ -1,9 +1,0 @@
-function [z_posterior] = compute_posterior(K, C, z_prior, y_measured)
-% computes posterior values
-
-  % calculate posterior augmented state
-  z_posterior = z_prior + K * (y_measured - C * z_prior);
-
-  % calculate covariance matrix
-  P_posterior = (identity)
-end
