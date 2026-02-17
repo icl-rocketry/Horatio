@@ -15,7 +15,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         x_pred = A(:, :, k) * x_ref(k) + B_minus(:, :, k) * u_ref(k) + B_plus(:, :, k) * u_ref(k+1);
         x_real = dynamics_step(x_ref(k), u_ref(k), u_ref(k+1), dt, params);
         w(k) = x_real - x_pred;
-    end
+    end 
 
     cvx_begin quiet
 
