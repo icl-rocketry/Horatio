@@ -1,6 +1,6 @@
-function [x_dot] = dynamics_fn_aug(t, state, u, params)
+function [x_dot] = dynamics_fn_aug(t, state, u, phase_idx, params)
 % augments the state vector to include the cost and violation measure.
-    state_dot = dynamics_fn(t, state, u, params);
+    state_dot = dynamics_fn(t, state, u, phase_idx, params);
     l_dot = cost_fn(params.R, u);
     
     g_violation = max(0, inequality_constraint_fn()) ^ 2;

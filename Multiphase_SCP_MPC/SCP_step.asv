@@ -176,7 +176,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                 sigma(1) >= 0.1;
 
             elseif curr_phase == 2
-                % spool constraints - need to change this to make it adaptive
+                % spool constraints
                 for k = 1:(N_relight - 1)
                     abs(U(1:3, k)) <= params.GF_max;
                     U(4:5, k) == zeros(2);
