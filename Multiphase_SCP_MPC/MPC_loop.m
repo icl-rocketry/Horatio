@@ -9,8 +9,8 @@ function [x_opt, u_opt, sigma_opt, fsm_state] = MPC_loop(x_current, x_ref, u_ref
             fsm_state.current_phase = 2;
             
             % dump old phase nodes
-            x_ref = x_ref(:, params.N_coast:end);
-            u_ref = u_ref(:, params.N_coast:end);
+            x_ref = x_ref(:, params.N_coast + 1:end);
+            u_ref = u_ref(:, params.N_coast + 1:end);
             sigma_ref = sigma_ref(1:2); 
         end
         
@@ -21,8 +21,8 @@ function [x_opt, u_opt, sigma_opt, fsm_state] = MPC_loop(x_current, x_ref, u_ref
             fsm_state.current_phase = 3;
             
             % dump old phase nodes
-            x_ref = x_ref(:, params.N_relight:end);
-            u_ref = u_ref(:, params.N_relight:end);
+            x_ref = x_ref(:, params.N_relight + 1:end);
+            u_ref = u_ref(:, params.N_relight + 1:end);
             sigma_ref = sigma_ref(1); 
         end
     end
@@ -89,8 +89,8 @@ function [x_opt, u_opt, sigma_opt, fsm_state] = MPC_loop(x_current, x_ref, u_ref
         end
         
         % check trajectory update distance
-        delta_x = norm(X_new - current_sol_x);
-        delta_u = norm(U_new - current_sol_u);
+        delta_x = norm(X_new - current_sol_x, 'fro');
+        delta_u = norm(U_new - current_sol_u, 'fro');
         total_change = delta_x + delta_u;
         
         % update solution

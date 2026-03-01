@@ -1,4 +1,4 @@
-function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current, fsm_state, telemetry, params)
+function [x_new, u_new, sigma_new, cvx_status] = SCP_step(x_ref, u_ref, sigma_ref, x_current, fsm_state, telemetry, params)
 % function to define the optimisation sub-problem and solve it for a single step
     
     % extract state machine information
@@ -15,11 +15,16 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
 
         % remaining phases
         num_active_phases = 3;
+
+        % separation indices
+        idx_coast_start = 1; idx_coast_end = N_coast;
+        idx_spool_start = N_coast + 1; idx_spool_end = N_coast + N_relight;
+        idx_burn_start = idx_spool_end + 1; idx_burn_end = N;
         
         % calculate timesteps for each phase
-        dt_coast = sigma_ref(1) / (N_coast - 1);
+        dt_coast = sigma_ref(3) / (N_coast - 1);
         dt_relight = sigma_ref(2) / (N_relight - 1);
-        dt_burn = sigma_ref(3) / (N_burn - 1);
+        dt_burn = sigma_ref(1) / (N_burn - 1);
 
     elseif current_phase == 2
         % relight phase
@@ -30,10 +35,14 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
 
         % remaining phases
         num_active_phases = 2;
+
+        % separation indices
+        idx_spool_start = 1; idx_spool_end = N_relight;
+        idx_burn_start = N_relight + 1; idx_burn_end = N;
         
         % calculate timesteps for each phase
         dt_relight = sigma_ref(2) / (N_relight - 1);
-        dt_burn = sigma_ref(3) / (N_burn - 1);
+        dt_burn = sigma_ref(1) / (N_burn - 1);
 
     else
         % burn phase
@@ -44,8 +53,11 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         % remaining phases
         num_active_phases = 1;
         
+        % separation indices
+        idx_burn_start = 1; idx_burn_end = N;
+        
         % calculate timesteps for each phase
-        dt_burn = sigma_ref(3) / (N_burn - 1);
+        dt_burn = sigma_ref(1) / (N_burn - 1);
     end 
     
     % pre-allocate matrices
@@ -59,15 +71,15 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
     for k = 1:N-1
         % select dt based on current phase
         if current_phase == 1
-            if k < N_coast
+            if k < idx_coast_end
                 dt_k = dt_coast; phase_idx = 1;
-            elseif k >= N_coast && k < (N_coast + N_relight)
+            elseif k >= idx_spool_start && k < idx_spool_end
                 dt_k = dt_relight; phase_idx = 2;
             else
                 dt_k = dt_burn; phase_idx = 3;
             end 
         elseif current_phase == 2
-            if k < N_relight
+            if k < idx_spool_end
                 dt_k = dt_relight; phase_idx = 2;
             else
                 dt_k = dt_burn; phase_idx = 3;
@@ -77,12 +89,12 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         end 
         
         % linearise around trajectory
-        [A(:, :, k), B_minus(:, :, k), B_plus(:, :, k), S(:, :, k)] = get_jacobian(x_ref(k), ...
-            u_ref(k), u_ref(k+1), phase_idx, params.eps_x, params.eps_u, params.eps_t, dt_k, params);
+        [A(:, :, k), B_minus(:, :, k), B_plus(:, :, k), S(:, :, k)] = get_jacobian(x_ref(:, k), ...
+            u_ref(:, k), u_ref(:, k+1), phase_idx, params.eps_x, params.eps_u, params.eps_t, dt_k, params);
         
         % predict states with linearised from and dynamics model to obtain corrective factor
-        x_pred = A(:, :, k) * x_ref(k) + B_minus(:, :, k) * u_ref(k) + B_plus(:, :, k) * u_ref(k+1);
-        x_real = dynamics_step(x_ref(k), u_ref(k), u_ref(k+1), dt_k, phase_idx, params);
+        x_pred = A(:, :, k) * x_ref(:, k) + B_minus(:, :, k) * u_ref(:, k) + B_plus(:, :, k) * u_ref(:, k+1);
+        x_real = dynamics_step(x_ref(:, k), u_ref(:, k), u_ref(:, k+1), dt_k, phase_idx, params);
         w(:, k) = x_real - x_pred;
     end
 
@@ -121,15 +133,15 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
             for k = 1:N-1
                 % get phase dependent sigma change
                 if current_phase == 1
-                    if k < N_coast
+                    if k < idx_coast_end
                         delta_sigma = sigma(3) - sigma_ref(3);
-                    elseif k >= N_coast && k < (N_coast + N_relight)
+                    elseif k >= idx_spool_start && k < idx_spool_end
                         delta_sigma = sigma(2) - sigma_ref(2);
                     else
                         delta_sigma = sigma(1) - sigma_ref(1);
                     end 
                 elseif current_phase == 2
-                    if k < N_relight
+                    if k < idx_spool_end
                         delta_sigma = sigma(2) - sigma_ref(2);
                     else
                         delta_sigma = sigma(1) - sigma_ref(1);
@@ -143,7 +155,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                              B_minus(:, :, k) * U(:, k) + ...
                              B_plus(:, :, k) * U(:, k+1) + ...
                              S(:, :, k) * delta_sigma + ...
-                             w(k) + ...
+                             w(:, k) + ...
                              (mu_p(:, k) - mu_n(:, k)); 
                 
                 % constrain dynamic relaxation parameters
@@ -154,24 +166,24 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                 constraint_enforcement(X(end, k+1), X(end, k)) <= params.epsilon;
             end
 
-            if curr_phase == 1
+            if current_phase == 1
                 % coast constraints
-                for k = 1:(N_coast - 1)
+                for k = idx_coast_start:idx_coast_end
                     abs(U(1:3, k)) <= params.GF_max;
-                    U(4:6, k) == zeros(3);
+                    U(4:6, k) == 0;
                 end
                 sigma(3) >= 0.1; 
                 
                 % relight constraints
-                for k = idx_end_coast:(N_coast + N_relight - 2)
+                for k = idx_spool_start:idx_spool_end
                     abs(U(1:3, k)) <= params.GF_max;
-                    U(4:5, k) == zeros(2);
+                    U(4:5, k) == 0;
                     U(6, k) == params.relight_throttle;
                 end
                 sigma(2) == params.predicted_relight_time; 
                 
                 % burn constraints
-                for k = (N_coast + N_relight - 2):N
+                for k = idx_burn_start:idx_burn_end
                     U(6,k) <= params.min_throttle;
                     U(6,k) <= params.max_throttle;
                     abs(U(1:3,k)) <= params.GF_max;
@@ -181,7 +193,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
 
             elseif curr_phase == 2
                 % spool constraints - need to change this to make it adaptive
-                for k = 1:(N_relight - 1)
+                for k = idx_spool_start:idx_spool_end
                     abs(U(1:3, k)) <= params.GF_max;
                     U(4:5, k) == 0;
                     
@@ -200,8 +212,8 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                 sigma(2) <= params.max_spool_time; 
                 
                 % burn constraints
-                for k = N_relight:N
-                    U(6,k) <= params.min_throttle;
+                for k = idx_burn_start:idx_burn_end
+                    U(6,k) >= params.min_throttle;
                     U(6,k) <= params.max_throttle;
                     abs(U(1:3,k)) <= params.GF_max;
                     abs(U(4:5,k)) <= params.gimbal_max;
@@ -210,8 +222,8 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
 
             elseif curr_phase == 3
                 % burn constraints
-                for k = 1:N
-                    U(6,k) <= params.min_throttle;
+                for k = idx_burn_start:idx_burn_end
+                    U(6,k) >= params.min_throttle;
                     U(6,k) <= params.max_throttle;
                     abs(U(1:3,k)) <= params.GF_max;
                     abs(U(4:5,k)) <= params.gimbal_max;
@@ -235,6 +247,9 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
             sum(sigma) <= params.max_time;
 
     cvx_end
+
+    % obtain solver status
+    cvx_status = cvx_status;
         
     % Update optimal trajectory, control signal and horizon time
     x_new = full(X);
