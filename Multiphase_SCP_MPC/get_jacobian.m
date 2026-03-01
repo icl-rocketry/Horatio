@@ -1,11 +1,13 @@
 function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, phase_idx, epsilon_x, epsilon_u, epsilon_t, dt, params)
-% Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u,u_.
+% Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u,u_
+    % define parameters
     nx = length(x);
     nu = length(u);
     A = zeros(nx, nx);
     B_minus = zeros(nx, nu);
     B_plus = zeros(nx, nu);
-
+    
+    % instantiate zero vectors
     zero_vec_x = zeros(nx, 1);
     zero_vec_u = zeros(nu, 1);
     

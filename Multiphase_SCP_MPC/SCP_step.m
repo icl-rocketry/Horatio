@@ -1,12 +1,15 @@
-function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current, current_phase, params)
+function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current, fsm_state, telemetry, params)
 % function to define the optimisation sub-problem and solve it for a single step
     
+    % extract state machine information
+    current_phase = fsm_state.current_phase;
+
     % allocate horizon length and dt dependent on phase
     if current_phase == 1
         % coast phase
         % calculate horizon length
         N_coast = params.N_coast;
-        N_relight = params.N_relight;
+        N_relight = fsm_state.N_relight;
         N_burn = params.N_burn;
         N = N_coast + N_relight + N_burn;
 
@@ -17,10 +20,11 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         dt_coast = sigma_ref(1) / (N_coast - 1);
         dt_relight = sigma_ref(2) / (N_relight - 1);
         dt_burn = sigma_ref(3) / (N_burn - 1);
+
     elseif current_phase == 2
         % relight phase
         % calculate horizon length
-        N_relight = params.N_relight;
+        N_relight = fsm_state.N_relight;
         N_burn = params.N_burn;
         N = N_relight + N_burn;
 
@@ -30,6 +34,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         % calculate timesteps for each phase
         dt_relight = sigma_ref(2) / (N_relight - 1);
         dt_burn = sigma_ref(3) / (N_burn - 1);
+
     else
         % burn phase
         % calculate horizon length
@@ -70,13 +75,15 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         else
             dt_k = dt_burn; phase_idx = 3;
         end 
-
+        
+        % linearise around trajectory
         [A(:, :, k), B_minus(:, :, k), B_plus(:, :, k), S(:, :, k)] = get_jacobian(x_ref(k), ...
             u_ref(k), u_ref(k+1), phase_idx, params.eps_x, params.eps_u, params.eps_t, dt_k, params);
-
+        
+        % predict states with linearised from and dynamics model to obtain corrective factor
         x_pred = A(:, :, k) * x_ref(k) + B_minus(:, :, k) * u_ref(k) + B_plus(:, :, k) * u_ref(k+1);
         x_real = dynamics_step(x_ref(k), u_ref(k), u_ref(k+1), dt_k, phase_idx, params);
-        w(k) = x_real - x_pred;
+        w(:, k) = x_real - x_pred;
     end
 
     cvx_begin quiet
@@ -94,10 +101,6 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
         
         % obtain trajectory distance from refernce and normalise onto manifold
         d = X - x_ref;
-        for k = 1:N
-            q_raw = d(params.q_idx, k);
-            d(params.q_idx, k) = q_raw / norm(q_raw);
-        end
         
         % obtain objective function
         J_cost = L + grad_L * d(:, end); 
@@ -116,6 +119,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
             X(:, 1) == x_current;
             
             for k = 1:N-1
+                % get phase dependent sigma change
                 if current_phase == 1
                     if k < N_coast
                         delta_sigma = sigma(3) - sigma_ref(3);
@@ -164,7 +168,7 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                     U(4:5, k) == zeros(2);
                     U(6, k) == params.relight_throttle;
                 end
-                sigma(2) == params.predicted_spool_time; 
+                sigma(2) == params.predicted_relight_time; 
                 
                 % burn constraints
                 for k = (N_coast + N_relight - 2):N
@@ -179,8 +183,16 @@ function [x_new, u_new, sigma_new] = SCP_step(x_ref, u_ref, sigma_ref, x_current
                 % spool constraints - need to change this to make it adaptive
                 for k = 1:(N_relight - 1)
                     abs(U(1:3, k)) <= params.GF_max;
-                    U(4:5, k) == zeros(2);
-                    U(6, k) == pred_throttle_reading; % need to define this
+                    U(4:5, k) == 0;
+                    
+                    % Convert telemetry force to dimensionless throttle
+                    throttle_curr = telemetry.thrust / params.T_max;
+                    throttle_dot = telemetry.thrust_gradient / params.T_max;
+                    
+                    % Throttle command fed as current relight state
+                    % equivilant throttle (in reality throttle is held at a constant during spool up but this is to avoid crashing the solver)
+                    fraction = (k - 1) / (N_relight - 1);
+                    U(6, k) == throttle_curr + throttle_dot * (fraction * sigma(2));
                 end
 
                 % change to keep going
