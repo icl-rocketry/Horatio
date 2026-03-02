@@ -1,5 +1,6 @@
-WIP Control system for propulsive landing - to be paired with controller physics model repo.
--
+# Horatio
+
+- WIP Control system for propulsive landing - to be paired with controller physics model repo.
 
 Current control architecture
 -
