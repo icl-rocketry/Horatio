@@ -55,6 +55,12 @@ function [x_new, u_new, sigma_new] = warm_start(prev_x, prev_u, prev_sigma, fsm_
     % create state and control outputs
     x_new = x_shifted;
     u_new = u_shifted;
+
+    % reset mayer addition
+    x_new(15, 1) = 0;
+    x_new(16, 1) = 0;
+
+    % initialise current state
     current_x = x_new(:, 1);
     
     % define internal node boundaries and precalculate phase specific dt values
@@ -74,31 +80,37 @@ function [x_new, u_new, sigma_new] = warm_start(prev_x, prev_u, prev_sigma, fsm_
         dt_burn = sigma_new(1) / (params.N_burn - 1);
     end
 
+    % stores current phase
+    stored_current_phase = fsm_state.current_phase;
+
     % Forward integration loop
     for k = 1:N-1
+        % reset current phase
+        fsm_state.current_phase = stored_current_phase;
+
         % define timestep based on current phase
         if fsm_state.current_phase == 1
             if k < idx_end_coast
-                dt_k = dt_coast; phase_idx = 1;
+                dt_k = dt_coast; fsm_state.current_phase = 1;
             elseif k >= idx_end_coast && k < idx_end_spool
-                dt_k = dt_spool; phase_idx = 2;
+                dt_k = dt_spool; fsm_state.current_phase = 2;
             else
-                dt_k = dt_burn; phase_idx = 3;
+                dt_k = dt_burn; fsm_state.current_phase = 3;
             end
        
         elseif fsm_state.current_phase == 2
             if k < idx_end_spool
-                dt_k = dt_spool; phase_idx = 2;
+                dt_k = dt_spool; fsm_state.current_phase = 2;
             else
-                dt_k = dt_burn; phase_idx = 3;
+                dt_k = dt_burn; fsm_state.current_phase = 3;
             end
             
         elseif fsm_state.current_phase == 3
-            dt_k = dt_burn; phase_idx = 3;
+            dt_k = dt_burn; fsm_state.current_phase = 3;
         end
         
         % integrate dynamics forward
-        x_new(:, k+1) = dynamics_step(current_x, u_new(:, k), u_new(:, k+1), dt_k, phase_idx, params);
+        x_new(:, k+1) = dynamics_step(current_x, u_new(:, k), u_new(:, k+1), dt_k, fsm_state.current_phase, params);
         
         % Re-normalize attitude immediately after integration
         q_raw = x_new(params.q_idx, k+1);

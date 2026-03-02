@@ -67,35 +67,54 @@ function [x_new, u_new, sigma_new, cvx_status] = SCP_step(x_ref, u_ref, sigma_re
     S = zeros(params.state_size, 1, N-1);
     w = zeros(params.state_size, N-1);
 
+    % stores current phase
+    stored_current_phase = fsm_state.current_phase;
+
     % Linearise dynamics around reference trajectory
     for k = 1:N-1
         % select dt based on current phase
         if current_phase == 1
             if k < idx_coast_end
-                dt_k = dt_coast; phase_idx = 1;
+                dt_k = dt_coast; 
+                fsm_state.current_phase = 1;
+                N_phase = params.N_coast;
             elseif k >= idx_spool_start && k < idx_spool_end
-                dt_k = dt_relight; phase_idx = 2;
+                dt_k = dt_relight; 
+                fsm_state.current_phase = 2;
+                N_phase = N_relight;
             else
-                dt_k = dt_burn; phase_idx = 3;
+                dt_k = dt_burn; 
+                fsm_state.current_phase = 3;
+                N_phase = params.N_burn;
             end 
         elseif current_phase == 2
             if k < idx_spool_end
-                dt_k = dt_relight; phase_idx = 2;
+                dt_k = dt_relight; 
+                fsm_state.current_phase = 2;
+                N_phase = N_relight;
             else
-                dt_k = dt_burn; phase_idx = 3;
+                dt_k = dt_burn; 
+                fsm_state.current_phase = 3;
+                N_phase = params.N_burn;
             end 
         else
-            dt_k = dt_burn; phase_idx = 3;
+            dt_k = dt_burn; 
+            fsm_state.current_phase = 3;
+            N_phase = params.N_burn;
         end 
         
         % linearise around trajectory
         [A(:, :, k), B_minus(:, :, k), B_plus(:, :, k), S(:, :, k)] = get_jacobian(x_ref(:, k), ...
-            u_ref(:, k), u_ref(:, k+1), phase_idx, params.eps_x, params.eps_u, params.eps_t, dt_k, params);
+            u_ref(:, k), u_ref(:, k+1), fsm_state, N_phase, params.eps_x, ...
+            params.eps_u, params.eps_t, dt_k, params);
         
         % predict states with linearised from and dynamics model to obtain corrective factor
         x_pred = A(:, :, k) * x_ref(:, k) + B_minus(:, :, k) * u_ref(:, k) + B_plus(:, :, k) * u_ref(:, k+1);
-        x_real = dynamics_step(x_ref(:, k), u_ref(:, k), u_ref(:, k+1), dt_k, phase_idx, params);
+        x_real = dynamics_step(x_ref(:, k), u_ref(:, k), u_ref(:, k+1), dt_k, fsm_state, params);
         w(:, k) = x_real - x_pred;
+
+        % reset current phase
+        fsm_state.current_phase = stored_current_phase;
     end
 
     cvx_begin quiet

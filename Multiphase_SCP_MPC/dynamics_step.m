@@ -1,10 +1,10 @@
-function [x_] = dynamics_step(x, u, u_, dt, phase_idx, params)
+function [x_] = dynamics_step(x, u, u_, dt, fsm_state, params)
 % RK4 integration step with FOH control input
     u_grad = (u_ - u) / dt;
-    k1 = dynamics_fn_aug(t, x, u, phase_idx, params);
-    k2 = dynamics_fn_aug(t + (dt/2), x + (dt/2) * k1, u + u_grad * (dt/2), phase_idx, params);
-    k3 = dynamics_fn_aug(t + (dt/2), x + (dt/2) * k2, u + u_grad * (dt/2), phase_idx, params);
-    k4 = dynamics_fn_aug(t + dt, x + dt * k3, u_, phase_idx, params);
+    k1 = dynamics_fn_aug(t, x, u, fsm_state, params);
+    k2 = dynamics_fn_aug(t + (dt/2), x + (dt/2) * k1, u + u_grad * (dt/2), fsm_state, params);
+    k3 = dynamics_fn_aug(t + (dt/2), x + (dt/2) * k2, u + u_grad * (dt/2), fsm_state, params);
+    k4 = dynamics_fn_aug(t + dt, x + dt * k3, u_, fsm_state, params);
     x_ = x + dt * ((k1/6) + (k2/3) + (k3/3) + (k4/6));
     
     % Normalise quaternions after addition

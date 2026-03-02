@@ -1,4 +1,4 @@
-function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, phase_idx, epsilon_x, epsilon_u, epsilon_t, dt, params)
+function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, fsm_state, N_phase, epsilon_x, epsilon_u, epsilon_t, dt, params)
 % Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u,u_
     % define parameters
     nx = length(x);
@@ -26,7 +26,8 @@ function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, phase_idx, epsilon_x, 
             x_minus(params.q_idx) = q_m / norm(q_m);
         end 
 
-        A(:, i) = (dynamics_step(x_plus, u, u_, dt, phase_idx, params) - dynamics_step(x_minus, u, u_, dt, phase_idx, params)) / (2 * eps_x(i));
+        A(:, i) = (dynamics_step(x_plus, u, u_, dt, fsm_state, params) ...
+            - dynamics_step(x_minus, u, u_, dt, fsm_state, params)) / (2 * eps_x(i));
     end 
 
     for i = 1:nu
@@ -35,13 +36,15 @@ function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, phase_idx, epsilon_x, 
 
         eps_u(i) = epsilon_u(i);
         eps_u_(i) = epsilon_u(i);
-        B_minus(:, i) = (dynamics_step(x, u + eps_u, u_, dt, phase_idx, params) - dynamics_step(x, u - eps_u, u_, dt, phase_idx, params)) / (2 * eps_u(i));
-        B_plus(:, i) = (dynamics_step(x, u, u + eps_u_, dt, phase_idx, params) - dynamics_step(x, u, u - eps_u_, dt, phase_idx, params)) / (2 * eps_u_(i));
+        B_minus(:, i) = (dynamics_step(x, u + eps_u, u_, dt, fsm_state, params) ...
+            - dynamics_step(x, u - eps_u, u_, dt, fsm_state, params)) / (2 * eps_u(i));
+        B_plus(:, i) = (dynamics_step(x, u, u + eps_u_, dt, fsm_state, params) ...
+            - dynamics_step(x, u, u - eps_u_, dt, fsm_state, params)) / (2 * eps_u_(i));
     end 
     
     eps_t = epsilon_t;
-    val_plus  = dynamics_step(x, u, u_, dt + eps_t, phase_idx, params);
-    val_minus = dynamics_step(x, u, u_, dt - eps_t, phase_idx, params);
+    val_plus = dynamics_step(x, u, u_, dt + eps_t, fsm_state, params);
+    val_minus = dynamics_step(x, u, u_, dt - eps_t, fsm_state, params);
     dx_ddt = (val_plus - val_minus) / (2 * eps_t);
-    S = dx_ddt * (1 / (params.N - 1));
+    S = dx_ddt * (1 / (N_phase - 1));
 end

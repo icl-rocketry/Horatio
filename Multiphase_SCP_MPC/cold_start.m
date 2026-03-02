@@ -10,8 +10,8 @@ function [x_guess, u_guess, sigma_guess] = cold_start(x_init, params)
 
     % instantiate cold output arrays
     u_guess = zeros(params.control_size, N);
-    x_guess = zeros(params.state_size, N);
-    x_guess(:, 1) = x_init;
+    x_guess = zeros(params.state_size + 2, N);
+    x_guess(1:params.state_size, 1) = x_init;
     
     % calculate rough estimate phase times
     vz_nm_safe = min(x_init(6), -1.0);
