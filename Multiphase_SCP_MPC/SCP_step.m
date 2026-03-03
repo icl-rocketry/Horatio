@@ -221,7 +221,7 @@ function [x_new, u_new, sigma_new, cvx_status] = SCP_step(x_ref, u_ref, sigma_re
                     throttle_dot = telemetry.thrust_gradient / params.T_max;
                     
                     % Throttle command fed as current relight state
-                    % equivilant throttle (in reality throttle is held at a constant during spool up but this is to avoid crashing the solver)
+                    % equivalent throttle (in reality throttle is held at a constant during spool up but this is to avoid crashing the solver)
                     fraction = (k - 1) / (N_relight - 1);
                     U(6, k) == throttle_curr + throttle_dot * (fraction * sigma(2));
                 end
