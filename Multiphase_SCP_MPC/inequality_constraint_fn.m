@@ -20,7 +20,7 @@ function [g] = inequality_constraint_fn(t, x, u, x_target, constraints, tighteni
     n_axis = [-1; 0; 0];
     
     % constrain glideslope and tighten
-    g_aoa = norm(v_body) * cos(constraints.aoa_max) - dot(v_body, n_axis) + tightening_params.d5;
+    g_aoa = dot(v_body, n_axis) - norm(v_body) * cos(constraints.aoa_max) + tightening_params.d5;
     
     % assemble the final column vector
     g = [g_cone; g_aoa];
