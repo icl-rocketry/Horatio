@@ -24,7 +24,7 @@ end
 %CT to DT:
 %A_d = expm(A.*Ts);
 %B_d = expm() - could use Van Loan's matrix-exponential method
-system_CT = ss(A, B);
+system_CT = ss(A, B); %error here
 system_DT = c2d(system_CT, Ts, 'zoh');    
 Ad = system_DT.A;
 Bd = system_DT.B;
