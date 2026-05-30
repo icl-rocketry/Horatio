@@ -4,7 +4,7 @@ function [u_TVLQR_val] = u_TVLQR(x, x_MPC, K_grid)
     height = x(3);
     h_MPC = x_MPC(3, :);
 
-    k = find(h_MPC >= height, 1, 'last')  %last index above current height, current height and x between nodes k and k+1
+    k = find(h_MPC >= height, 1, 'last');  %last index above current height, current height and x between nodes k and k+1
     %edge cases:
     if isempty(k), k = 1; end                  
     if k >= length(h_MPC), k = length(h_MPC)-1; end  
