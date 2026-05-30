@@ -11,7 +11,7 @@ function [x_opt, u_opt, sigma_opt, fsm_state] = MPC_loop(x_current, x_ref, u_ref
             % dump old phase nodes
             x_ref = x_ref(:, params.N_coast + 1:end);
             u_ref = u_ref(:, params.N_coast + 1:end);
-            sigma_ref = sigma_ref(1:2); 
+            sigma_ref = sigma_ref(1:2);
         end
         
     elseif fsm_state.current_phase == 2
