@@ -200,45 +200,108 @@ row_in = 0; % row tracker
 
 % Equality constraints:
 
-% ICs
-for i = 1:nx
-    row_eq = row_eq + 1;
-    nz_A = nz_A + 1;
+% Initial Conditions
+num_val = nx;
+row_eq_idx = (row_eq + 1 : row_eq + num_val);
 
-    % create A entry
-    iA(nz_A) = row_eq;
-    jA(nz_A) = idx_X(i);
-    vA(nz_A) = 1;
-    
-    % create b entry
-    b_eq(row_eq, 1) = x_current(i);
-end
+% Store value and indexed positions
+iA(nz_A + 1 : nz_A + num_val) = row_eq_idx;
+jA(nz_A + 1 : nz_A + num_val) = idx_X(1 : num_val)';
+vA(nz_A + 1 : nz_A + num_val) = 1;
 
-% Next state constraint: - need to finish
-% - Constrain next state to match linarised model
-for k = 1:N-1
+% Setup RHS
+b_eq(row_eq_idx, 1) = x_current(:); 
+
+% Next state constraint:
+for k = 1 : N-1
+    % Get total time for current flight phase
     if current_phase == 1
         if k < idx_coast_end
-            delta_sigma = sigma(3) - sigma_ref(3);
+            sig_idx = 3;
         elseif k >= idx_spool_start && k < idx_spool_end
-            delta_sigma = sigma(2) - sigma_ref(2);
+            sig_idx = 2;
         else
-            delta_sigma = sigma(1) - sigma_ref(1);
+            sig_idx = 1;
         end 
     elseif current_phase == 2
         if k < idx_spool_end
-            delta_sigma = sigma(2) - sigma_ref(2);
+            sig_idx = 2;
         else
-            delta_sigma = sigma(1) - sigma_ref(1);
+            sig_idx = 1;
         end 
-    elseif current_phase == 3
-        delta_sigma = sigma(1) - sigma_ref(1);
+    else
+        sig_idx = 1;
     end
+    
+    % Rows of equality conditions needing to be filled, nx states constrained
+    rows_k = (row_eq + 1 : row_eq + nx)';
+    
+    % Next state term X_k+1, all coefficient of 1
+    iA(nz_A + 1 : nz_A + nx) = rows_k;
+    jA(nz_A + 1 : nz_A + nx) = idx_X(k * nx + 1 : k * nx + nx)';
+    vA(nz_A + 1 : nz_A + nx) = 1;
+    nz_A = nz_A + nx;
+
+    % Current state term X_k, coefficient of -A
+    [r, c, v] = find(-A(:, :, k));
+    num_val = length(v);
+    if num_val > 0
+        iA(nz_A + 1 : nz_A + num_val) = rows_eq + r;
+        jA(nz_A + 1 : nz_A + num_val) = idx_X((k - 1) * nx + c)';
+        vA(nz_A + 1 : nz_A + num_val) = val;
+        nz_A = nz_A + num_val;
+    end
+
+    % Current control term U_k, coefficient of -B_minus
+    [r, c, v] = find(-B_minus(:, :, k));
+    num_val = length(v);
+    if num_val > 0
+        iA(nz_A + 1 : nz_A + num_val) = rows_eq + r;
+        jA(nz_A + 1 : nz_A + num_val) = idx_U((k - 1) * nu + c)';
+        vA(nz_A + 1 : nz_A + num_val) = val;
+        nz_A = nz_A + num_val;
+    end
+    
+    % Next control term U_k+1, coefficient of -B_plus
+    [r, c, v] = find(-B_plus(:, :, k));
+    num_val = length(v);
+    if num_val > 0
+        iA(nz_A + 1 : nz_A + num_val) = rows_eq + r;
+        jA(nz_A + 1 : nz_A + num_val) = idx_U(k * nu + c)';
+        vA(nz_A + 1 : nz_A + num_val) = val;
+        nz_A = nz_A + num_val;
+    end
+
+    % Time dialation constraint sigma, coefficient of -S
+    [r, c, v] = find(-S(:, :, k));
+    num_val = length(v);
+    if num_val > 0
+        iA(nz_A + 1 : nz_A + num_val) = rows_eq + r;
+        jA(nz_A + 1 : nz_A + num_val) = idx_sigma(sig_idx);
+        vA(nz_A + 1 : nz_A + num_val) = val;
+        nz_A = nz_A + num_val;
+    end
+
+    % slack contraint mu_p, coefficient of -1
+    iA(nz_A + 1 : nz_A + nx) = rows_k;
+    jA(nz_A + 1 : nz_A + nx) = idx_mup((k - 1) * nx + 1 : (k - 1) * nx + nx)';
+    vA(nz_A + 1 : nz_A + nx) = -1;
+    nz_A = nz_A + nx;
+
+    % slack constraint mu_n, coefficient of 1
+    iA(nz_A + 1 : nz_A + nx) = rows_k;
+    jA(nz_A + 1 : nz_A + nx) = idx_mun((k - 1) * nx + 1 : (k - 1) * nx + nx)';
+    vA(nz_A + 1 : nz_A + nx) = 1;
+    nz_A = nz_A + nx;
+    
+    % setup RHS
+    b_eq(rows_k, 1) = w(:, k) - S(:,:,k) * sigma_ref(sig_idx);
+    
+    % Advance row tracker
+    row_eq = row_eq + nx;
 end
 
 % Quaternion constraint:
-% - Quaternions must remain on 4D mainfold during optimisation
-% - Rotated attitude in quaternoins must keep magnitude 1
 for k = 1:N
     % extract reference quaternoin orientation
     q_bar = x_ref(params.q_idx, k);
@@ -252,7 +315,7 @@ for k = 1:N
         vA(nz_A) = q_bar(i);
     end
 
-    % constaint in RHS to keep Quaternion on manifold
+    % constaint in RHS to keep Quaternion on manifold by maintaining magnitude 1
     b_eq(row_eq, 1) = 1;
 end
 
@@ -274,6 +337,32 @@ for k = 1:N-1
     % create inequality
     h_ineq(row_in, 1) = params.epsilon;
 end
+
+num_eq = N - 1;
+
+row_idx = (row_in + 1 : row_in + num_vals);
+
+idx_y_k = idx_X((1 : N - 1) * nx)';
+idx_y_k_ = idx_X((2 : N) * nx)';
+
+iG(nz_G + 1 : nz_G + num_eq) = rows_ctcs;
+jG(nz_G + 1 : nz_G + num_eq) = idx_y_k_;
+vG(nz_G + 1 : nz_G + num_eq) = 1;
+
+iG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = rows_ctcs;
+jG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = idx_y_k;
+vG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = -1;
+
+h_ineq(row_idx, 1) = params.epsilon;
+
+row_in = row_in + num_eq;
+nz_G = nz_G + 2 * num_eq;
+
+% Slack Limit Constraint
+
+% Terminal Physical limits
+
+% 
 
 % Setup sparse matrix
 G_sparse = sparse(iG, jG, vG, row_in, nz);

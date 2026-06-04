@@ -1,50 +1,35 @@
-function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, fsm_state, N_phase, epsilon_x, epsilon_u, epsilon_t, dt, params)
+function [A, B_minus, B_plus, S] = get_jacobian(x, u, u_, fsm_state, N_phase, dt, params)
 % Calculates A and B Jacobian Matricies by linearising the dynamics model about x,u,u_
     % define parameters
     nx = length(x);
     nu = length(u);
-    A = zeros(nx, nx);
-    B_minus = zeros(nx, nu);
-    B_plus = zeros(nx, nu);
     
-    % instantiate zero vectors
-    zero_vec_x = zeros(nx, 1);
-    zero_vec_u = zeros(nu, 1);
+    % Build dynamics matrix
+    for i = 1 : nx
+        Ac(:, i) = dynamics_fn(x, ...
+            u, u_, fsm_state, params);
+    end
     
-    for i = 1:nx
-        eps_x = zero_vec_x;
-        eps_x(i) = epsilon_x(i);
-
-        x_plus = x + eps_x;
-        x_minus = x - eps_x;
-
-        if ismember(i, params.q_idx)
-            q_p = x_plus(params.q_idx);
-            q_m = x_minus(params.q_idx);
-            
-            x_plus(params.q_idx)  = q_p / norm(q_p);
-            x_minus(params.q_idx) = q_m / norm(q_m);
-        end 
-
-        A(:, i) = (dynamics_step(x_plus, u, u_, dt, fsm_state, params) ...
-            - dynamics_step(x_minus, u, u_, dt, fsm_state, params)) / (2 * eps_x(i));
-    end 
-
-    for i = 1:nu
-        eps_u = zero_vec_u;
-        eps_u_ = zero_vec_u;
-
-        eps_u(i) = epsilon_u(i);
-        eps_u_(i) = epsilon_u(i);
-        B_minus(:, i) = (dynamics_step(x, u + eps_u, u_, dt, fsm_state, params) ...
-            - dynamics_step(x, u - eps_u, u_, dt, fsm_state, params)) / (2 * eps_u(i));
-        B_plus(:, i) = (dynamics_step(x, u, u + eps_u_, dt, fsm_state, params) ...
-            - dynamics_step(x, u, u - eps_u_, dt, fsm_state, params)) / (2 * eps_u_(i));
+    % Build control matrix
+    for i = 1 : nu
+        Bc(:, i) = dynamics_fn(x, ...
+            u, u_, fsm_state, params);
     end 
     
-    eps_t = epsilon_t;
-    val_plus = dynamics_step(x, u, u_, dt + eps_t, fsm_state, params);
-    val_minus = dynamics_step(x, u, u_, dt - eps_t, fsm_state, params);
-    dx_ddt = (val_plus - val_minus) / (2 * eps_t);
+    % Convert from continuous form to discrete FOH form
+    M = [Ac, Bc, 0    ;
+         0 , 0 , eye(nu, nu);
+         0 , 0 , 0    ];
+    state_transition_mat = expm(M);
+
+    % Create FOH system
+    A = state_transition_mat(1, 1);
+    B_plus = state_transition_mat(1, 3) * (1 / dt);
+    B_minus = state_transition_mat(1, 2) - B_plus;
+
+    % Compute time step sensitivity
+    vel_next = dynamics_fn(x, ...
+            u, u_, fsm_state, params);
+    dx_ddt = vel_next - (1 / dt) * B_plus * (u_ - u);
     S = dx_ddt * (1 / (N_phase - 1));
 end
