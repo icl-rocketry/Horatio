@@ -150,14 +150,14 @@ cvx_end
 
 
 % Vector sizing
-nx = params.state_size + 2;
+nx = params.state_size + 2; % number of augmented states
 nu = params.control_size;
 
 % Indexing map
 idx_X = 1 : (nx * N);
 idx_U = idx_X(end) + 1 : idx_X(end) + (nu * N);
-idx_mun = idx_U(end) + 1 : idx_U(end) + (nx * (N-1));
-idx_mup = idx_mun(end) + 1 : idx_mup(end) + (nx * (N-1));
+idx_mun = idx_U(end) + 1 : idx_U(end) + (nx * (N - 1));
+idx_mup = idx_mun(end) + 1 : idx_mup(end) + (nx * (N - 1));
 idx_nuh = idx_mup(end) + 1;
 idx_sigma = idx_nuh + 1 : idx_nuh + num_active_phases;
 idx_Jprox_x = idx_sigma(end) + 1;
@@ -302,13 +302,13 @@ for k = 1 : N-1
 end
 
 % Quaternion constraint:
-for k = 1:N
+for k = 1 : N
     % extract reference quaternoin orientation
     q_bar = x_ref(params.q_idx, k);
 
     % create indexing
     row_eq = row_eq + 1;
-    for i = 1:length(params.q_idx)
+    for i = 1 : length(params.q_idx)
         nz_A = nz_A + 1; 
         iA(nz_A) = row_eq; 
         jA(nz_A) = idx_X((k - 1) * nx + params.q_idx(i)); 
@@ -324,47 +324,58 @@ end
 
 % Inequality constraints: 
 
-% Violation constraint
-for k = 1:N-1
-    % Indexing
-    row_in = row_in + 1;
-    idx_y_k = idx_X(k * nx);
-    idx_y_k_ = idx_X((k + 1) * nx);
-
-    % log to tracking vectors
-    iG(end + 1) = row_in;
-
-    % create inequality
-    h_ineq(row_in, 1) = params.epsilon;
-end
-
+% Violation constraint:
+% Number of equations added
 num_eq = N - 1;
 
+% Row indices for all equations
 row_idx = (row_in + 1 : row_in + num_vals);
 
-idx_y_k = idx_X((1 : N - 1) * nx)';
-idx_y_k_ = idx_X((2 : N) * nx)';
+% Extract collision check index from augmented state vector for current and next state
+idx_y_k = idx_X((1 : N - 1) * (nx + 2))';
+idx_y_k_ = idx_X((2 : N) * (nx + 2))';
 
-iG(nz_G + 1 : nz_G + num_eq) = rows_ctcs;
+% Log positions in matrix for next state and give coefficient 1
+iG(nz_G + 1 : nz_G + num_eq) = row_idx;
 jG(nz_G + 1 : nz_G + num_eq) = idx_y_k_;
 vG(nz_G + 1 : nz_G + num_eq) = 1;
 
-iG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = rows_ctcs;
-jG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = idx_y_k;
-vG(nz_G + num_eq + 1 : nz_G + 2*num_eq) = -1;
+% Log positions in matrix for current state and give coefficient -1
+iG(nz_G + num_eq + 1 : nz_G + 2 * num_eq) = row_idx;
+jG(nz_G + num_eq + 1 : nz_G + 2 * num_eq) = idx_y_k;
+vG(nz_G + num_eq + 1 : nz_G + 2 * num_eq) = -1;
 
+% Log RHS constraint
 h_ineq(row_idx, 1) = params.epsilon;
 
+% Move trackers forward
 row_in = row_in + num_eq;
 nz_G = nz_G + 2 * num_eq;
 
 % Slack Limit Constraint
 
+all_slacks = [idx_mun(:); idx_mup(:); idx_nuh];
+num_slacks = length(all_slacks);
+row_idx = (row_in + 1 : row_in + num_slacks)';
+
+% Log slack positions and coefficients in G
+iG(nz_G + 1 : nz_G + num_slacks) = row_idx;
+jG(nz_G + 1 : nz_G + num_slacks) = all_slacks;
+vG(nz_G + 1 : nz_G + num_slacks) = -1;
+
+% Log RHS constraints
+h_ineq(row_idx, 1) = 0;
+
+% Move trackers forward
+row_in = row_in + num_slacks;
+nz_G = nz_G + num_slacks;
+
 % Terminal Physical limits
 
-% 
+% Lorentz cone dims
 
 % Setup sparse matrix
+A_sparse = sparse(iA, jA, vA, row_eq, nz);
 G_sparse = sparse(iG, jG, vG, row_in, nz);
 
 % Run ECOS solver to find optimal solution
