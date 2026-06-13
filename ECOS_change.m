@@ -320,7 +320,116 @@ for k = 1 : N
 end
 
 % Coast and spool locks:
-% ...
+if current_phase == 1 % Currently coasting so solve through 3 phases
+    % Get coast index list
+    k_coast = (idx_coast_start : idx_coast_end);
+    num_k = length(k_coast);
+
+    % Coasting constraints
+    if num_k > 0
+        num_eq = 3 * num_k; % 3 controls locked per step
+        rows = (row_eq + 1 : row_eq + num_eq)';
+        
+        % Broadcast indices: [4; 5; 6] + [0, nu, 2*nu...]
+        rel_idx = (4:6)' + (k_coast - 1) * nu; 
+        rel_idx = rel_idx(:); % Flatten to column vector
+        
+        iA(nz_A + 1 : nz_A + num_eq) = rows;
+        jA(nz_A + 1 : nz_A + num_eq) = idx_U(rel_idx(:));
+        vA(nz_A + 1 : nz_A + num_eq) = 1;
+        b_eq(rows, 1) = 0;
+        
+        row_eq = row_eq + num_eq;
+        nz_A   = nz_A + num_eq;
+    end
+    
+    % Spool Constraints 
+    k_spool = idx_spool_start : idx_spool_end;
+    num_k = length(k_spool);
+    if num_k > 0
+        num_eq = 2 * num_k; % 2 controls locked per step
+        rows = (row_eq + 1 : row_eq + num_eq)';
+        
+        rel_idx = (4:5)' + (k_spool - 1) * nu;
+        
+        iA(nz_A + 1 : nz_A + num_eq) = rows;
+        jA(nz_A + 1 : nz_A + num_eq) = idx_U(rel_idx(:));
+        vA(nz_A + 1 : nz_A + num_eq) = 1;
+        b_eq(rows, 1) = 0;
+        
+        row_eq = row_eq + num_eq;
+        nz_A   = nz_A + num_eq;
+        
+        % Spool Horizon: U(6) == relight_throttle
+        num_eq = num_k; % 1 control locked per step
+        rows = (row_eq + 1 : row_eq + num_eq)';
+        
+        rel_idx = 6 + (k_spool - 1) * nu;
+        
+        iA(nz_A + 1 : nz_A + num_eq) = rows;
+        jA(nz_A + 1 : nz_A + num_eq) = idx_U(rel_idx(:));
+        vA(nz_A + 1 : nz_A + num_eq) = 1;
+        b_eq(rows, 1) = params.relight_throttle;
+        
+        row_eq = row_eq + num_eq;
+        nz_A   = nz_A + num_eq;
+    end
+    
+    % --- Single Equation: sigma(2) == predicted_relight_time ---
+    row_eq = row_eq + 1;
+    nz_A = nz_A + 1; 
+    iA(nz_A) = row_eq; 
+    jA(nz_A) = idx_sigma(2); 
+    vA(nz_A) = 1; 
+    b_eq(row_eq, 1) = params.predicted_relight_time;
+
+elseif current_phase == 2 % Currently spooling so solve through 2 phases
+    
+    k_spool = idx_spool_start : idx_spool_end;
+    num_k = length(k_spool);
+    if num_k > 0
+        % --- Spool Horizon: U(4:5) == 0 ---
+        num_eq = 2 * num_k;
+        rows = (row_eq + 1 : row_eq + num_eq)';
+        rel_idx = (4:5)' + (k_spool - 1) * nu;
+        
+        iA(nz_A + 1 : nz_A + num_eq) = rows;
+        jA(nz_A + 1 : nz_A + num_eq) = idx_U(rel_idx(:));
+        vA(nz_A + 1 : nz_A + num_eq) = 1;
+        b_eq(rows, 1) = 0;
+        
+        row_eq = row_eq + num_eq;
+        nz_A   = nz_A + num_eq;
+        
+        % --- Adaptive Throttle Coupling: U_6 - (dot * frac)*sigma_2 = curr ---
+        throttle_curr = telemetry.thrust / params.T_max;
+        throttle_dot = telemetry.thrust_gradient / params.T_max;
+        
+        num_eq = num_k;
+        rows = (row_eq + 1 : row_eq + num_eq)';
+        
+        % Indices and dynamic fractions
+        rel_idx = 6 + (k_spool - 1) * nu;
+        fractions = ((k_spool - 1) / (N_relight - 1))'; % Transposed to column
+        
+        % Term 1: 1 * U_6
+        iA(nz_A + 1 : nz_A + num_eq) = rows;
+        jA(nz_A + 1 : nz_A + num_eq) = idx_U(rel_idx(:));
+        vA(nz_A + 1 : nz_A + num_eq) = 1;
+        
+        % Term 2: (-throttle_dot * fraction) * sigma(2)
+        % (Assigned to the exact same rows as Term 1)
+        iA(nz_A + num_eq + 1 : nz_A + 2*num_eq) = rows;
+        jA(nz_A + num_eq + 1 : nz_A + 2*num_eq) = idx_sigma(2);
+        vA(nz_A + num_eq + 1 : nz_A + 2*num_eq) = -throttle_dot * fractions;
+        
+        % Right-hand constant
+        b_eq(rows, 1) = throttle_curr;
+        
+        row_eq = row_eq + num_eq;
+        nz_A   = nz_A + 2 * num_eq; % Advanced by 2*num_eq because we added two terms
+    end
+end
 
 % Inequality constraints: 
 
@@ -352,8 +461,7 @@ h_ineq(row_idx, 1) = params.epsilon;
 row_in = row_in + num_eq;
 nz_G = nz_G + 2 * num_eq;
 
-% Slack Limit Constraint
-
+% Slack Limit Constraint: 
 all_slacks = [idx_mun(:); idx_mup(:); idx_nuh];
 num_slacks = length(all_slacks);
 row_idx = (row_in + 1 : row_in + num_slacks)';
@@ -370,7 +478,35 @@ h_ineq(row_idx, 1) = 0;
 row_in = row_in + num_slacks;
 nz_G = nz_G + num_slacks;
 
-% Terminal Physical limits
+% Terminal Physical limits:
+% grad_P * X_N - nu_h <= -P + grad_P * x_ref_N
+% Step row down and get indexing
+row_in = row_in + 1;
+[idx_nz_P, ~, val_P] = find(grad_P(:)); 
+num_nz = length(idx_nz_P);
+
+% Setup inequality for terminal conditions
+if num_nz > 0
+    iG(nz_G + 1 : nz_G + num_nz) = row_in; 
+    jG(nz_G + 1 : nz_G + num_nz) = idx_X(end - nx + idx_nz_P); 
+    vG(nz_G + 1 : nz_G + num_nz) = val_P;
+end
+
+% Add nu condition
+nz_G = nz_G + 1; 
+iG(nz_G) = row_in; 
+jG(nz_G) = idx_nuh; 
+vG(nz_G) = -1;
+
+% Setup RHS
+h_ineq(row_in, 1) = - P + grad_P * x_ref(1 : nx_phys, N);
+
+% Total time constraint:
+row_in = row_in + 1;
+for i = 1:num_active_phases
+    nz_G = nz_G + 1; iG(nz_G) = row_in; jG(nz_G) = idx_sigma(i); vG(nz_G) = 1;
+end
+h_ineq(row_in, 1) = params.max_time;
 
 % Lorentz cone dims
 

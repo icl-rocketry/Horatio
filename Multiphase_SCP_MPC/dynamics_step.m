@@ -1,5 +1,5 @@
 function [x_] = dynamics_step(x, u, u_, dt, fsm_state, params)
-% RK4 integration step with FOH control input
+% RK4 integration step with FOH control input using augmented state vector
     u_grad = (u_ - u) / dt;
     k1 = dynamics_fn_aug(t, x, u, fsm_state, params);
     k2 = dynamics_fn_aug(t + (dt/2), x + (dt/2) * k1, u + u_grad * (dt/2), fsm_state, params);

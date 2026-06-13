@@ -17,7 +17,7 @@ function [x_dot] = dynamics_fn_aug(t, state, u, fsm_state, params)
     h_violation = sum(h_vec .^ 2);
     
     % Calculate violation "Energy"
-    y_dot = g_violation + h_violation; 
+    y_dot = g_violation + h_violation;
     
     % augement state derivative vector
     x_dot = [state_dot; l_dot; y_dot];
